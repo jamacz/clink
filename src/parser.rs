@@ -23,14 +23,13 @@ pub enum Token {
 
 #[derive(Debug, Clone)]
 pub enum AST {
-    Left(Box<AST>),
-    Right(Box<AST>),
-    Print(Box<AST>),
-    Read(Box<AST>),
-    Split(Box<AST>, Box<AST>, Box<AST>),
-    Apply(Box<AST>, Box<AST>),
-    Id(Box<AST>, Vec<String>),
-    Param,
+    Left,
+    Right,
+    Print,
+    Read,
+    Split(Vec<AST>, Vec<AST>),
+    Bracketed(Vec<AST>),
+    Id(Vec<String>),
 }
 
 #[derive(Debug)]
@@ -147,7 +146,7 @@ fn next_token(i: Peekable<Chars>) -> Result<(Option<Token>, Peekable<Chars>), Pa
 
 // -------------------------------------------------
 
-pub fn parse(dir: &Path) -> Result<HashMap<Vec<String>, AST>, ParseError> {
+pub fn parse(dir: &Path) -> Result<HashMap<Vec<String>, Vec<AST>>, ParseError> {
     let mut queued = HashMap::new();
 
     // scan all known functions and return functions from dir
@@ -406,29 +405,28 @@ fn parse_colon(func: Vec<Token>) -> Result<Vec<Token>, ParseError> {
     }
 }
 
-fn parse_functions(func: Vec<Token>) -> AST {
-    let mut current = AST::Param;
+fn parse_functions(func: Vec<Token>) -> Vec<AST> {
+    let mut current = Vec::new();
     for token in func.into_iter().rev() {
         match token {
             Token::Bracket(ts) => {
-                if let AST::Param = current {
+                if current.is_empty() {
                     current = parse_functions(ts)
                 } else {
-                    current = AST::Apply(Box::new(current), Box::new(parse_functions(ts)))
+                    current.push(AST::Bracketed(parse_functions(ts)))
                 }
             }
-            Token::Bang => current = AST::Left(Box::new(current)),
-            Token::Question => current = AST::Right(Box::new(current)),
-            Token::At => current = AST::Read(Box::new(current)),
-            Token::Hash => current = AST::Print(Box::new(current)),
+            Token::Bang => current.push(AST::Left),
+            Token::Question => current.push(AST::Right),
+            Token::At => current.push(AST::Read),
+            Token::Hash => current.push(AST::Print),
             Token::Split(l, r) => {
-                current = AST::Split(
-                    Box::new(current),
-                    Box::new(parse_functions(l)),
-                    Box::new(parse_functions(r)),
-                )
+                current.push(AST::Split(
+                    parse_functions(l),
+                    parse_functions(r),
+                ))
             }
-            Token::Id(id) => current = AST::Id(Box::new(current), id),
+            Token::Id(id) => current.push(AST::Id(id)),
             _ => {}
         }
     }
