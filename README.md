@@ -146,7 +146,7 @@ So if it sees a `!`, it runs `!(:)` from right to left. It sees `(:)`, enters th
 
 So `(:)` will pop from the stack, and do nothing, no matter what is on top of the stack. Finally, it pushes a `!` back on the stack, to signal one of the two bits was `!`.
 
-If it sees a `?`, again, it does nothing. It doesn't need to pop from the stack, since what is on top of the stack already is our answer.
+If the function sees a `?`, again, it does nothing. It doesn't need to pop from the stack, since what is on top of the stack already is our answer.
 
 ### Recursion
 
