@@ -7,7 +7,38 @@ mod parser;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
-    let path = Path::new(&args[1]).to_path_buf();
+
+    match args.get(1) {
+        Some(s) => match s.as_str() {
+            "run" => {
+                let a = args.get(2);
+                match a {
+                    Some(a) => run(a),
+                    None => {
+                        println!("ERROR: expected file");
+                    }
+                }
+            }
+            "help" => {
+                println!("Available commands:\n");
+                println!("help          this command");
+                println!("run <file>    interpret clink file");
+            }
+            _ => {
+                println!("ERROR: unknown command");
+                println!("HINT:  type 'clink help' for commands");
+            }
+        }
+        _ => {
+            println!("ERROR: expected command");
+            println!("HINT:  type 'clink help' for commands");
+        }
+    }
+}
+
+fn run(file: &String) {
+
+    let path = Path::new(file).to_path_buf();
 
     let program = parser::parse(&path);
 

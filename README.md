@@ -24,10 +24,10 @@ You will find a binary in `./target/release`. Extract to wherever you want.
 
 ## Usage
 
-To run clink, navigate to your project folder and run:
+To run the clink interpreter, navigate to your project folder and run:
 
 ``` bash
-clink <file>
+clink run <file>
 ```
 
 where `<file>` is a `.clink` file.
