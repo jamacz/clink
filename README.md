@@ -142,7 +142,7 @@ or      !(:):
 
 This code first splits the function into `!(:)` and ` `.
 
-So if it sees a `!`, it runs `!(:)` from left to right. It sees `(:)`, enters the brackets, then pops and matches. Only this time, both sides of the expression are blank, as there is nothing on either side of `:` inside the brackets. 
+So if it sees a `!`, it runs `!(:)` from right to left. It sees `(:)`, enters the brackets, then pops and matches. Only this time, both sides of the expression are blank, as there is nothing on either side of `:` inside the brackets. 
 
 So `(:)` will pop from the stack, and do nothing, no matter what is on top of the stack. Finally, it pushes a `!` back on the stack, to signal one of the two bits was `!`.
 
