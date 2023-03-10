@@ -121,7 +121,7 @@ not     ?:!
 
 Okay, what?
 
-The `:` pops from the stack, and depending on the value:
+The `:` is always done first. It pops from the stack, and depending on the value:
 
 - if it's a `!`, do the stuff on the left
 - if it's a `?`, do the stuff on the right
@@ -142,7 +142,9 @@ or      !(:):
 
 This code first splits the function into `!(:)` and ` `.
 
-So if it sees a `!`, it then pops and matches, because of `(:)`. Only this time, both sides of the expression are blank. `(:)` will pop from the stack, and do nothing, no matter what is on top of the stack. Finally, it pushes a `!` back on the stack, to signal one of the two bits was `!`.
+So if it sees a `!`, it runs `!(:)` from left to right. It sees `(:)`, enters the brackets, then pops and matches. Only this time, both sides of the expression are blank, as there is nothing on either side of `:` inside the brackets. 
+
+So `(:)` will pop from the stack, and do nothing, no matter what is on top of the stack. Finally, it pushes a `!` back on the stack, to signal one of the two bits was `!`.
 
 If it sees a `?`, again, it does nothing. It doesn't need to pop from the stack, since what is on top of the stack already is our answer.
 
