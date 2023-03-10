@@ -36,34 +36,4 @@ fn main() {
         println!("{}", e);
         return;
     }
-
-    // match &mut parsed {
-    //     Err(e) => println!("{}", e),
-    //     Ok(parsed) => loop {
-    //         use std::io::{stdin, stdout, Write};
-    //         let mut s = String::new();
-    //         print!("> ");
-    //         stdout().flush().unwrap();
-    //         stdin().read_line(&mut s).unwrap();
-    //         if let Some('\n') = s.chars().next_back() {
-    //             s.pop();
-    //         }
-    //         if let Some('\r') = s.chars().next_back() {
-    //             s.pop();
-    //         }
-    //         let parsed_expr = parser::parse_statement(s.as_str(), parsed);
-    //         match parsed_expr {
-    //             Ok(parsed_expr) => {
-    //                 let result = interpret(&parsed, &parsed_expr);
-    //                 match result {
-    //                     Ok(r) => println!("< {}", r),
-    //                     Err(e) => println!("{}", e),
-    //                 }
-    //             }
-    //             Err(err) => {
-    //                 println!("{}", err)
-    //             }
-    //         }
-    //     },
-    // }
 }
