@@ -1,0 +1,3 @@
+parse:
+- get function names, definitions and dependencies, as well as imports
+- 

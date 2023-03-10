@@ -1,0 +1,53 @@
+()              unit
+x!              left(x)
+x?              right(x)
+x,              if x == () then x! else x?
+(l:r)x          if x! then l(x) else r(x)
+id function;    define function
+#x              print ascii value of x
+@x              append user input to x
+
+symbols:
+(
+)
+:
+,
+!
+?
+;
+@
+#
+
+std:
+<<      shift left
+<<n     shift left word
+>>      shift right
+>>n     shift right word
+(_<     put left on back)
+(_>     put right on back)
+(_      if singleton)
+$       clone top bit
+$n      clone top word
+$$n     copy n bits along
+/       swap top bits
+/n      swap top words
+//n     swap n bits along
+%       pop bit
+%n      pop word
+
+^       xor bits
+^n      xor words (NOT IMPL)
+&       and bits
+&n      and words
+|       or bits
+|n      or words
+~       invert bit
+~n      invert word (NOT IMPL)
+--n     negate word (NOT IMPL)
+=n      check if words are equal
+
++n      add words (NOT IMPL)
+-n      subtract words (NOT IMPL)
+*n      multiply words (NOT IMPL)
+\n      divide words (NOT IMPL)
+%%n      mod words (NOT IMPL)
