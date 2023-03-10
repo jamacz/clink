@@ -2,6 +2,7 @@ use std::{env::{self}, path::{Path, Component}};
 
 use interpreter::interpret;
 
+mod compiler;
 mod interpreter;
 mod parser;
 
