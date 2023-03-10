@@ -158,6 +158,40 @@ pop_bangs   pop_bangs:?
 
 If it pops a `!`, it calls itself. Otherwise, if it pops a `?`, it simply pushes another `?` back on the stack.
 
+## Examples
+
+### Adding two 8 bit integers
+
+This program adds 00001110 and 00000110, and outputs the top 8 bits of the stack
+
+```txt
+_       inspect inspect inspect inspect inspect inspect inspect inspect +8????!!!??????!!?;
+
+8/      /(!7/:?7/);
+7/      /(!6/:?6/);
+6/      /(!5/:?5/);
+5/      /(!4/:?4/);
+4/      /(!3/:?3/);
+3/      /(!2/:?2/);
+2/      /(!/:?/);
+/       (!!:?!):(!?:??);
+
+++      ((!!:!?):(!?:?!)):((!?:?!):(?!:??));
+
++8      (:)++8;
+
+++8     ++(!(!++7:?++7):?(!++7:?++7))8/;
+++7     ++(!(!++6:?++6):?(!++6:?++6))7/;
+++6     ++(!(!++5:?++5):?(!++5:?++5))6/;
+++5     ++(!(!++4:?++4):?(!++4:?++4))5/;
+++4     ++(!(!++3:?++3):?(!++3:?++3))4/;
+++3     ++(!(!++2:?++2):?(!++2:?++2))3/;
+++2     ++(!(!+:?+):?(!+:?+))2/;
++       (!?:?!):(?!:??);
+
+inspect #(??!????!:??!!!!!!)
+```
+
 ## FAQs
 
 ### Why?
