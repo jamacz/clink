@@ -242,7 +242,8 @@ pub fn compile(module_name: &str, funcs: HashMap<Vec<String>, Vec<AST>>, entry: 
     let mut cmd = Command::new("clang");
     cmd.arg(output_filename)
         .arg("-o")
-        .arg(Path::new(module_name));
+        .arg(Path::new(module_name)).output().expect(format!("ERROR: linking error (link manually with clang {} -o {}", output_filename.to_str().unwrap(), module_name).as_str());
+    
 }
 
 struct Env<'a> {

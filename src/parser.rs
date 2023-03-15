@@ -192,8 +192,6 @@ pub fn parse(main_func: &mut Vec<String>) -> Result<HashMap<Vec<String>, Vec<AST
 
     parse_funcs(main_func, &mut func_defs, &mut functions, &mut imports)?;
 
-    dbg!(&func_defs);
-
     Ok(func_defs)
 }
 
@@ -377,7 +375,6 @@ fn parse_funcs(
     func_defs.insert(current.clone(), p_f);
 
     for mut t_p in to_parse {
-        dbg!(&t_p);
         parse_funcs(&mut t_p, func_defs, functions, imports)?;
     }
 
