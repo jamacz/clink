@@ -53,13 +53,6 @@ fn run(file: &String) {
 
     let path = Path::new(file).to_path_buf();
 
-    let program = parse(&path);
-
-    if let Err(e) = program {
-        println!("{}", e);
-        return;
-    }
-
     let mut vec_path = Vec::new();
     for component in path.with_extension("").components() {
         if let Component::Normal(x) = component {
@@ -73,6 +66,13 @@ fn run(file: &String) {
         }
     }
     vec_path.push("_".to_string());
+
+    let program = parse(&mut vec_path);
+
+    if let Err(e) = program {
+        println!("{}", e);
+        return;
+    }
 
     let result = interpret(&(program.unwrap()), vec_path);
 
@@ -85,13 +85,6 @@ fn run(file: &String) {
 fn do_compile(file: &String) {
     let path = Path::new(file).to_path_buf();
 
-    let program = parse(&path);
-
-    if let Err(e) = program {
-        println!("{}", e);
-        return;
-    }
-
     let mut vec_path = Vec::new();
     for component in path.with_extension("").components() {
         if let Component::Normal(x) = component {
@@ -105,6 +98,13 @@ fn do_compile(file: &String) {
         }
     }
     vec_path.push("_".to_string());
+
+    let program = parse(&mut vec_path);
+
+    if let Err(e) = program {
+        println!("{}", e);
+        return;
+    }
 
     compile(current_dir().unwrap().file_name().unwrap().to_str().unwrap(), program.unwrap(), vec_path);
 }

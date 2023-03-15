@@ -1,9 +1,11 @@
 use std::{
     collections::{HashMap, HashSet},
+    env::current_dir,
     fmt::Display,
     fs,
     iter::Peekable,
-    str::Chars, path::{PathBuf, Path, Component},
+    path::Path,
+    str::Chars,
 };
 
 #[derive(Debug)]
@@ -39,9 +41,14 @@ pub enum ParseError {
     CannotDefineFunctionOutsidePackage(Vec<String>),
     FunctionDefinedTwice(String),
     UnknownFunction(Vec<String>),
+    UnknownPackage(Vec<String>),
     AmbiguousReference(Vec<String>),
     UnknownAssociativity,
-    StringReadError
+    StringReadError,
+    OSStringConversionError,
+    CannotFindCurrentDir,
+    ErrorReadingDirectory,
+    CannotGetMetadata,
 }
 
 impl Display for ParseError {
@@ -50,15 +57,30 @@ impl Display for ParseError {
             ParseError::FileNotFound(p) => write!(f, "ERROR: file `{}` not found", p),
             ParseError::ExpectedPackageName => write!(f, "ERROR: expected package name"),
             ParseError::CannotDefineFunctionOutsidePackage(id) => {
-                write!(f, "ERROR: cannot define function `{}` outside package", id.join("."))
+                write!(
+                    f,
+                    "ERROR: cannot define function `{}` outside package",
+                    id.join(".")
+                )
             }
             ParseError::UnknownFunction(path) => {
                 write!(f, "ERROR: unknown function {}", path.join("."))
             }
-            ParseError::AmbiguousReference(id) => write!(f, "ERROR: ambiguous reference `{}`", id.join(".")),
+            ParseError::AmbiguousReference(id) => {
+                write!(f, "ERROR: ambiguous reference `{}`", id.join("."))
+            }
             ParseError::UnknownAssociativity => write!(f, "ERROR: unknown associativity of `:`"),
             ParseError::StringReadError => write!(f, "ERROR: string read error"),
-            ParseError::FunctionDefinedTwice(id) => write!(f, "ERROR: function `{}` defined twice", id),
+            ParseError::FunctionDefinedTwice(id) => {
+                write!(f, "ERROR: function `{}` defined twice", id)
+            }
+            ParseError::UnknownPackage(path) => {
+                write!(f, "ERROR: unknown package {}", path.join("."))
+            }
+            ParseError::CannotFindCurrentDir => write!(f, "ERROR: cannot find current directory"),
+            ParseError::ErrorReadingDirectory => write!(f, "ERROR: cannot read directory"),
+            ParseError::OSStringConversionError => write!(f, "ERROR: OSStr converstion error"),
+            ParseError::CannotGetMetadata => write!(f, "ERROR: cannot get metadata"),
         }
     }
 }
@@ -146,197 +168,222 @@ fn next_token(i: Peekable<Chars>) -> Result<(Option<Token>, Peekable<Chars>), Pa
 
 // -------------------------------------------------
 
-pub fn parse(dir: &Path) -> Result<HashMap<Vec<String>, Vec<AST>>, ParseError> {
-    let mut queued = HashMap::new();
+pub fn parse(main_func: &mut Vec<String>) -> Result<HashMap<Vec<String>, Vec<AST>>, ParseError> {
+    let directory = current_dir().map_err(|_| ParseError::CannotFindCurrentDir)?;
+    let mut functions = HashMap::new();
+    let mut packages = HashSet::new();
+    let mut imported_packages = HashSet::new();
+    let mut imports = HashMap::new();
 
-    // scan all known functions and return functions from dir
-    let mut functions = scan_funcs(dir, &mut queued)?;
+    scan_dir(
+        &directory,
+        Vec::new(),
+        &mut functions,
+        &mut packages,
+        &mut imported_packages,
+        &mut imports,
+    )?;
 
-    // scan through and find all known references
-    scan_for_references(&mut functions, &queued)?;
-
-    let mut referenced_funcs = HashMap::new();
-
-    for function in functions {
-        let v = queued.remove(&function).unwrap();
-        referenced_funcs.insert(
-            function,
-            parse_functions(parse_colon(parse_brackets(v)?)?),
-        );
+    for pkg in imported_packages {
+        if !packages.contains(&pkg) {
+            return Err(ParseError::UnknownPackage(pkg))
+        }
     }
 
-    Ok(referenced_funcs)
+    let mut func_defs = HashMap::new();
+
+    parse_funcs(main_func, &mut func_defs, &mut functions, &mut imports)?;
+
+    dbg!(&func_defs);
+
+    Ok(func_defs)
 }
 
-fn scan_funcs(
+fn scan_dir(
     dir: &Path,
-    private_funcs: &mut HashMap<Vec<String>, Vec<Token>>,
-) -> Result<HashSet<Vec<String>>, ParseError> {
-    let input = fs::read_to_string(dir).map_err(|_| {
-        let s = dir.to_str();
-        match s {
-            Some(s) => ParseError::FileNotFound(s.to_string()),
-            None => ParseError::StringReadError,
-        }
-    })?;
-
-    let mut vec_path = Vec::new();
-    for component in dir.with_extension("").components() {
-        if let Component::Normal(x) = component {
-            let st = x.to_str().ok_or(ParseError::StringReadError)?;
-            vec_path.push(st.to_string())
-            
-        }
-    }
-
-    // find all functions and packages
-
-    let mut tokenised = tokenise(input.as_str())?.into_iter();
-    let mut defining = false;
-
-    let mut packages = HashSet::new();
-    let mut functions = HashMap::new();
-
-    let mut function_tokens = Vec::new();
-    let mut function_name = String::new();
-
-    let mut function_names = HashSet::new();
-
-    loop {
-        match tokenised.next() {
-            None => break,
-            Some(token) => {
-                if defining {
-                    if let Token::Semicolon = token {
-                        defining = false;
-                        if function_names.contains(&function_name) {
-                            return Err(ParseError::FunctionDefinedTwice(function_name))
+    pkg: Vec<String>,
+    functions: &mut HashMap<Vec<String>, Vec<Token>>,
+    packages: &mut HashSet<Vec<String>>,
+    imported_packages: &mut HashSet<Vec<String>>,
+    imports: &mut HashMap<Vec<String>, HashSet<Vec<String>>>,
+) -> Result<(), ParseError> {
+    for file in dir
+        .read_dir()
+        .map_err(|_| ParseError::ErrorReadingDirectory)?
+    {
+        if let Ok(file) = file {
+            let mut file_name = pkg.clone();
+            file_name.push(
+                file.path()
+                    .with_extension("")
+                    .file_name()
+                    .ok_or(ParseError::CannotGetMetadata)?
+                    .to_str()
+                    .ok_or(ParseError::OSStringConversionError)?
+                    .to_string(),
+            );
+            packages.insert(file_name.clone());
+            if file.metadata().unwrap().is_dir() {
+                scan_dir(
+                    file.path().as_path(),
+                    file_name,
+                    functions,
+                    packages,
+                    imported_packages,
+                    imports,
+                )?;
+            } else if let Some(t) = file.path().extension() {
+                //check if clink file
+                if t == "clink" {
+                    let content = fs::read_to_string(file.path()).map_err(|_| {
+                        match file.path().to_str() {
+                            Some(th) => ParseError::FileNotFound(th.to_string()),
+                            None => ParseError::OSStringConversionError,
                         }
-                        function_names.insert(function_name.clone());
-                        functions.insert(function_name.clone(), function_tokens);
-                        function_tokens = Vec::new();
-                    } else {
-                        function_tokens.push(token);
-                    }
-                } else {
-                    if let Token::Bang = token {
-                        let pkg = tokenised.next();
-                        if let Some(Token::Id(pkg_name)) = pkg {
-                            packages.insert(pkg_name);
-                        } else {
-                            return Err(ParseError::ExpectedPackageName);
-                        }
-                    } else if let Token::Id(id) = token {
-                        if id.len() != 1 {
-                            return Err(ParseError::CannotDefineFunctionOutsidePackage(id));
-                        }
-                        let mut mid = id;
-                        function_name = mid.pop().unwrap();
-                        defining = true;
-                    }
-                }
-            }
-        }
-    }
-    if defining {
-        if function_names.contains(&function_name) {
-            return Err(ParseError::FunctionDefinedTwice(function_name))
-        }
-        function_names.insert(function_name.clone());
-        functions.insert(function_name.clone(), function_tokens);
-    }
+                    })?;
 
-    // get knowledge of functions in all referenced packages recursively
+                    let tokenised = tokenise(content.as_str())?;
 
-    for package in &packages {
-        let mut path = PathBuf::new();
-        for sub in package {
-            path.push(sub);
-        }
-        scan_funcs(&path.with_extension("clink"), private_funcs)?;
-    }
+                    let mut defining = false;
+                    let mut importing = false;
+                    let mut current_func = Vec::new();
+                    let mut current_func_name = String::new();
 
-    // for each function, get references, and search referenced packages for matches
-
-    let mut referenced_funcs = HashMap::new();
-
-    for (function_name, function_tokens) in functions {
-        let mut new_tokens = Vec::new();
-        for token in function_tokens {
-            if let Token::Id(id) = token {
-                if id.len() == 1 && function_names.contains(id.last().unwrap()) {
-                    let mut d = vec_path.clone();
-                    d.append(&mut id.clone());
-                    new_tokens.push(Token::Id(d.clone()));
-                } else {
-                    let mut found = None;
-                    for package in &packages {
-                        let mut d = package.clone();
-                        d.append(&mut id.clone());
-                        if private_funcs.contains_key(&d) {
-                            if let Some(_) = found {
-                                return Err(ParseError::AmbiguousReference(id));
+                    for token in tokenised {
+                        if importing {
+                            if let Token::Id(id) = token {
+                                if let None = imports.get(&file_name) {
+                                    imports.insert(file_name.clone(), HashSet::new());
+                                }
+                                imported_packages.insert(id.clone());
+                                imports.get_mut(&file_name).unwrap().insert(id);
                             } else {
-                                found = Some(d);
+                                return Err(ParseError::ExpectedPackageName);
+                            }
+                            importing = false;
+                        } else if defining {
+                            if let Token::Semicolon = token {
+                                let mut f_n = file_name.clone();
+                                f_n.push(current_func_name);
+                                if functions.contains_key(&f_n) {
+                                    return Err(ParseError::FunctionDefinedTwice(f_n.join(".")));
+                                }
+                                functions.insert(f_n, current_func);
+                                current_func = Vec::new();
+                                current_func_name = String::new();
+                                defining = false;
+                            } else {
+                                current_func.push(token);
+                            }
+                        } else {
+                            if let Token::Bang = token {
+                                importing = true;
+                            } else if let Token::Id(id) = token {
+                                if id.len() != 1 {
+                                    return Err(ParseError::CannotDefineFunctionOutsidePackage(id));
+                                }
+                                current_func_name = id.first().unwrap().clone();
+                                defining = true;
                             }
                         }
                     }
-                    if let None = found {
-                        return Err(ParseError::UnknownFunction(id));
+
+                    if defining {
+                        let mut f_n = file_name.clone();
+                        f_n.push(current_func_name);
+                        if functions.contains_key(&f_n) {
+                            return Err(ParseError::FunctionDefinedTwice(f_n.join(".")));
+                        }
+                        functions.insert(f_n, current_func);
                     }
-                    new_tokens.push(Token::Id(found.unwrap()))
                 }
-            } else {
-                new_tokens.push(token)
             }
         }
-
-        referenced_funcs.insert(function_name, new_tokens);
     }
 
-    // add all functions to list of known functions
-
-    for (function_name, function_tokens) in referenced_funcs {
-        let mut d = vec_path.clone();
-        d.push(function_name.clone());
-        private_funcs.insert(d, function_tokens);
-    }
-
-    let mut output = HashSet::new();
-
-    for function_name in function_names {
-        let mut d = vec_path.clone();
-        d.push(function_name.clone());
-        output.insert(d);
-    }
-
-    Ok(output)
+    Ok(())
 }
 
-fn scan_for_references(
-    names: &mut HashSet<Vec<String>>,
-    funcs: &HashMap<Vec<String>, Vec<Token>>,
+fn parse_funcs(
+    current: &Vec<String>,
+    func_defs: &mut HashMap<Vec<String>, Vec<AST>>,
+    functions: &mut HashMap<Vec<String>, Vec<Token>>,
+    imports: &mut HashMap<Vec<String>, HashSet<Vec<String>>>,
 ) -> Result<(), ParseError> {
-    let mut ids_to_check = HashSet::new();
-    for name in names.iter() {
-        let function = funcs.get(name).unwrap();
-        for token in function {
-            if let Token::Id(id) = token {
-                if !names.contains(id) {
-                    ids_to_check.insert(id);
+    let mut dirn = current.clone();
+    dirn.pop();
+
+    let f = functions.remove(current);
+    if let None = f {
+        return Ok(());
+    }
+    let f = f.unwrap();
+
+    let mut to_parse = Vec::new();
+
+    let mut new_f = Vec::new();
+
+    for token in f {
+        if let Token::Id(id) = token {
+            let mut found = None;
+            if current == &id || functions.contains_key(&id) || func_defs.contains_key(&id) {
+                found = Some(id.clone());
+            } else {
+                let mut ds = Vec::new();
+                for d in &dirn {
+                    ds.push(d.clone());
+                    let mut m = ds.clone();
+                    m.append(&mut id.clone());
+                    if current == &m || functions.contains_key(&m) || func_defs.contains_key(&m) {
+                        if let None = found {
+                            found = Some(m.clone());
+                        } else {
+                            return Err(ParseError::AmbiguousReference(id));
+                        }
+                    }
                 }
             }
+
+            if let None = found {
+                for import in imports.get(&dirn).unwrap() {
+                    let mut ds = Vec::new();
+                    for d in import {
+                        ds.push(d.clone());
+                        let mut m = ds.clone();
+                        m.append(&mut id.clone());
+                        if current == &m || functions.contains_key(&m) || func_defs.contains_key(&m)
+                        {
+                            if let None = found {
+                                found = Some(m.clone());
+                            } else {
+                                return Err(ParseError::AmbiguousReference(id));
+                            }
+                        }
+                    }
+                }
+            }
+
+            match found {
+                Some(x) => {
+                    to_parse.push(x.clone());
+                    new_f.push(Token::Id(x))
+                }
+                None => return Err(ParseError::UnknownFunction(id.clone())),
+            }
+        } else {
+            new_f.push(token);
         }
     }
 
-    if ids_to_check.is_empty() {
-        Ok(())
-    } else {
-        for id in ids_to_check {
-            names.insert(id.clone());
-        }
-        scan_for_references(names, funcs)
+    let p_f = parse_functions(parse_colon(parse_brackets(new_f)?)?);
+    func_defs.insert(current.clone(), p_f);
+
+    for mut t_p in to_parse {
+        dbg!(&t_p);
+        parse_funcs(&mut t_p, func_defs, functions, imports)?;
     }
+
+    Ok(())
 }
 
 fn parse_brackets(func: Vec<Token>) -> Result<Vec<Token>, ParseError> {
@@ -420,12 +467,7 @@ fn parse_functions(func: Vec<Token>) -> Vec<AST> {
             Token::Question => current.push(AST::Right),
             Token::At => current.push(AST::Read),
             Token::Hash => current.push(AST::Print),
-            Token::Split(l, r) => {
-                current.push(AST::Split(
-                    parse_functions(l),
-                    parse_functions(r),
-                ))
-            }
+            Token::Split(l, r) => current.push(AST::Split(parse_functions(l), parse_functions(r))),
             Token::Id(id) => current.push(AST::Id(id)),
             _ => {}
         }
