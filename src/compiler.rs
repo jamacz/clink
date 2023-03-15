@@ -1,9 +1,8 @@
-use std::{collections::{HashMap, HashSet}, path::Path, process::Command};
+use std::{collections::HashMap, path::Path, process::Command};
 
 use inkwell::{
-    builder::{self, Builder},
+    builder::Builder,
     context::Context,
-    module::{Linkage, Module},
     targets::{CodeModel, FileType, InitializationConfig, RelocMode, Target, TargetMachine},
     types::IntType,
     values::{FunctionValue, GlobalValue},
@@ -28,6 +27,7 @@ pub fn compile(module_name: &str, funcs: HashMap<Vec<String>, Vec<AST>>, entry: 
     stack.set_initializer(&stack_type.const_zero());
 
     let i64_type = context.i64_type();
+    let i32_type = context.i32_type();
     let index = module.add_global(i64_type, Some(AddressSpace::default()), "index");
     index.set_initializer(&i64_type.const_zero());
 
@@ -38,10 +38,15 @@ pub fn compile(module_name: &str, funcs: HashMap<Vec<String>, Vec<AST>>, entry: 
 
     // external functions
 
-    let pc_fn_type = context.f32_type().fn_type(&[], false);
+    let pc_fn_type = void_type.fn_type(&[i32_type.into()], false);
     let pc_fn_val = module
         .get_function("putchar")
         .unwrap_or(module.add_function("putchar", pc_fn_type, None));
+
+    let gc_fn_type = i32_type.fn_type(&[], false);
+    let gc_fn_val = module
+        .get_function("getchar")
+        .unwrap_or(module.add_function("getchar", gc_fn_type, None));
 
     // internal functions
 
@@ -86,17 +91,19 @@ pub fn compile(module_name: &str, funcs: HashMap<Vec<String>, Vec<AST>>, entry: 
 
         let i_nv = builder.build_int_add(i_v, i64_type.const_int(1, false), "");
 
-
         let if_l = context.append_basic_block(inc_func, "");
         let el = context.append_basic_block(inc_func, "");
 
         builder.build_conditional_branch(
-            builder.build_int_compare(IntPredicate::UGE, i_nv, i64_type.const_int(ARRAY_SIZE.into(), false), ""),
+            builder.build_int_compare(
+                IntPredicate::UGE,
+                i_nv,
+                i64_type.const_int(ARRAY_SIZE.into(), false),
+                "",
+            ),
             if_l,
             el,
         );
-
-
 
         builder.position_at_end(if_l);
         // PANIC!!!!!!!
@@ -136,6 +143,31 @@ pub fn compile(module_name: &str, funcs: HashMap<Vec<String>, Vec<AST>>, entry: 
         builder.build_return(None);
     }
 
+    let read_func = module.add_function("read", fn_type, None);
+    {
+        let basic_block = context.append_basic_block(read_func, "entry");
+        builder.position_at_end(basic_block);
+
+        let s_p = stack.as_pointer_value();
+        let mut acc = builder.build_call(gc_fn_val, &[], "").try_as_basic_value().unwrap_left().into_int_value();
+
+        for _ in 0..8 {
+            let i_p = index.as_pointer_value();
+            let i_v = builder.build_load(i64_type, i_p, "").into_int_value();
+
+            unsafe {
+                let x_p = builder.build_in_bounds_gep(bool_type, s_p, &[i_v], "");
+
+                builder.build_store(x_p, builder.build_int_truncate(acc, bool_type, ""));
+            }
+
+            acc = builder.build_right_shift(acc, i32_type.const_int(1, false), false, "");
+            builder.build_call(inc_func, &[], "");
+        }
+
+        builder.build_return(None);
+    }
+
     let mut entry_func = None;
     let mut func_defs = HashMap::new();
 
@@ -167,6 +199,7 @@ pub fn compile(module_name: &str, funcs: HashMap<Vec<String>, Vec<AST>>, entry: 
                 dec_func: dec_func,
                 inc_func: inc_func,
                 func_defs: &func_defs,
+                read_func: read_func,
             },
         );
 
@@ -223,6 +256,7 @@ struct Env<'a> {
     bool_type: IntType<'a>,
     i64_type: IntType<'a>,
     print_func: FunctionValue<'a>,
+    read_func: FunctionValue<'a>,
     inc_func: FunctionValue<'a>,
     dec_func: FunctionValue<'a>,
     function: FunctionValue<'a>,
@@ -274,7 +308,9 @@ fn build_ast(asts: Vec<AST>, env: &Env) {
             AST::Print => {
                 env.builder.build_call(env.print_func, &[], "");
             }
-            AST::Read => todo!(),
+            AST::Read => {
+                env.builder.build_call(env.read_func, &[], "");
+            }
             AST::Split(l, r) => {
                 let s_p = env.stack.as_pointer_value();
 
@@ -328,7 +364,7 @@ fn build_ast(asts: Vec<AST>, env: &Env) {
             AST::Bracketed(c) => build_ast(c, env),
             AST::Id(id) => {
                 env.builder.build_call(env.func_defs[&id], &[], "");
-            },
+            }
         }
     }
 }
