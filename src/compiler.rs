@@ -245,8 +245,6 @@ pub fn compile(module_name: &str, funcs: HashMap<Vec<String>, Vec<AST>>, entry: 
     cmd.arg(output_filename)
         .arg("-o")
         .arg(Path::new(module_name));
-
-    dbg!(cmd.output());
 }
 
 struct Env<'a> {

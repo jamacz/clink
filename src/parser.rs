@@ -44,7 +44,6 @@ pub enum ParseError {
     UnknownPackage(Vec<String>),
     AmbiguousReference(Vec<String>),
     UnknownAssociativity,
-    StringReadError,
     OSStringConversionError,
     CannotFindCurrentDir,
     ErrorReadingDirectory,
@@ -70,7 +69,6 @@ impl Display for ParseError {
                 write!(f, "ERROR: ambiguous reference `{}`", id.join("."))
             }
             ParseError::UnknownAssociativity => write!(f, "ERROR: unknown associativity of `:`"),
-            ParseError::StringReadError => write!(f, "ERROR: string read error"),
             ParseError::FunctionDefinedTwice(id) => {
                 write!(f, "ERROR: function `{}` defined twice", id)
             }
