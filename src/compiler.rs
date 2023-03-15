@@ -232,8 +232,6 @@ pub fn compile(module_name: &str, funcs: HashMap<Vec<String>, Vec<AST>>, entry: 
         )
         .unwrap();
 
-    println!("{}", module.to_string());
-
     let s = module_name.to_string() + ".o";
     let output_filename = Path::new(&s);
     target_machine
