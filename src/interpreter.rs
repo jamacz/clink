@@ -1,6 +1,6 @@
-use std::{collections::{HashMap}, fmt::Display};
+use std::{collections::HashMap, fmt::Display};
 
-use crate::parser;
+use crate::parser::{self, AST};
 
 #[derive(Debug)]
 pub enum RuntimeError {
@@ -16,7 +16,7 @@ impl Display for RuntimeError {
 }
 
 pub fn interpret(
-    program: &HashMap<Vec<String>, parser::AST>,
+    program: &HashMap<Vec<String>, Vec<AST>>,
     entry: Vec<String>,
 ) -> Result<(), RuntimeError> {
     let mut result = Vec::new();
@@ -31,60 +31,54 @@ pub fn interpret(
 }
 
 fn do_ast(
-    program: &HashMap<Vec<String>, parser::AST>,
+    program: &HashMap<Vec<String>, Vec<AST>>,
     param: &mut Vec<bool>,
-    ast: &parser::AST,
+    asts: &Vec<AST>,
 ) -> Result<(), RuntimeError> {
-    match ast {
-        parser::AST::Left(v) => {
-            do_ast(program, param, v)?;
-            param.push(true);
-        },
-        parser::AST::Right(v) => {
-            do_ast(program, param, v)?;
-            param.push(false);
-        },
-        parser::AST::Split(c, l, r) => {
-            do_ast(program, param, c)?;
-            if param.pop().unwrap_or(false) {
-                do_ast(program, param, l)?;
-            } else {
-                do_ast(program, param, r)?;
+    for ast in asts {
+        match ast {
+            AST::Left => {
+                param.push(true);
             }
-        }
-        parser::AST::Apply(f, g) => {
-            do_ast(program, param, f)?;
-            do_ast(program, param, g)?;
-        }
-        parser::AST::Id(t, id) => {
-            let f = program.get(id).unwrap();
-            do_ast(program, param, t)?;
-            do_ast(program, param, f)?;
-        }
-        parser::AST::Print(t) => {
-            do_ast(program, param, t)?;
-            let mut total: u8 = 0;
-            for _ in 0..8 {
-                total *= 2;
+            AST::Right => {
+                param.push(false);
+            }
+            parser::AST::Split(l, r) => {
                 if param.pop().unwrap_or(false) {
-                    total += 1;
-                }
-            }
-            print!("{}", char::from(total));
-        }
-        parser::AST::Read(t) => {
-            do_ast(program, param, t)?;
-            let mut code: u8 = read_char().try_into().unwrap();
-            for _ in 0..8 {
-                if code % 2 == 0 {
-                    param.push(false);
+                    do_ast(program, param, l)?;
                 } else {
-                    param.push(true);
+                    do_ast(program, param, r)?;
                 }
-                code /= 2;
+            }
+            parser::AST::Bracketed(f) => {
+                do_ast(program, param, f)?;
+            }
+            parser::AST::Id(id) => {
+                let f = program.get(id).unwrap();
+                do_ast(program, param, f)?;
+            }
+            parser::AST::Print => {
+                let mut total: u8 = 0;
+                for _ in 0..8 {
+                    total *= 2;
+                    if param.pop().unwrap_or(false) {
+                        total += 1;
+                    }
+                }
+                print!("{}", char::from(total));
+            }
+            parser::AST::Read => {
+                let mut code: u8 = read_char().try_into().unwrap();
+                for _ in 0..8 {
+                    if code % 2 == 0 {
+                        param.push(false);
+                    } else {
+                        param.push(true);
+                    }
+                    code /= 2;
+                }
             }
         }
-        parser::AST::Param => {},
     }
     Ok(())
 }

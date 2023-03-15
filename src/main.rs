@@ -1,11 +1,15 @@
-use std::{env::{self}, path::{Path, Component}};
+use std::{env::{self, current_dir}, path::{Path, Component}};
 
+use compiler::compile;
 use interpreter::interpret;
+use parser::parse;
 
+mod compiler;
 mod interpreter;
 mod parser;
 
 fn main() {
+    env::set_var("RUST_BACKTRACE", "1");
     let args: Vec<String> = env::args().collect();
 
     match args.get(1) {
@@ -24,6 +28,15 @@ fn main() {
                 println!("help          this command");
                 println!("run <file>    interpret clink file");
             }
+            "build" => {
+                let a = args.get(2);
+                match a {
+                    Some(a) => do_compile(a),
+                    None => {
+                        println!("ERROR: expected file");
+                    }
+                }
+            }
             _ => {
                 println!("ERROR: unknown command");
                 println!("HINT:  type 'clink help' for commands");
@@ -40,12 +53,37 @@ fn run(file: &String) {
 
     let path = Path::new(file).to_path_buf();
 
-    let program = parser::parse(&path);
+    let mut vec_path = Vec::new();
+    for component in path.with_extension("").components() {
+        if let Component::Normal(x) = component {
+            match x.to_str() {
+                Some(x) => vec_path.push(x.to_string()),
+                None => {
+                    println!("ERROR: string read error");
+                    return;
+                },
+            }
+        }
+    }
+    vec_path.push("_".to_string());
+
+    let program = parse(&mut vec_path);
 
     if let Err(e) = program {
         println!("{}", e);
         return;
     }
+
+    let result = interpret(&(program.unwrap()), vec_path);
+
+    if let Err(e) = result {
+        println!("{}", e);
+        return;
+    }
+}
+
+fn do_compile(file: &String) {
+    let path = Path::new(file).to_path_buf();
 
     let mut vec_path = Vec::new();
     for component in path.with_extension("").components() {
@@ -61,10 +99,12 @@ fn run(file: &String) {
     }
     vec_path.push("_".to_string());
 
-    let result = interpret(&(program.unwrap()), vec_path);
+    let program = parse(&mut vec_path);
 
-    if let Err(e) = result {
+    if let Err(e) = program {
         println!("{}", e);
         return;
     }
+
+    compile(current_dir().unwrap().file_name().unwrap().to_str().unwrap(), program.unwrap(), vec_path);
 }
