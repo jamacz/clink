@@ -12,7 +12,7 @@ This project consists of both a compiler and interpreter for Clink. It's not the
 
 ## Installation
 
-Installation is easy. Make sure you have `cargo` and `clang` installed and run:
+Installation is easy. Make sure you have `cargo`, `llvm` and `clang` installed and run:
 
 ```bash
 git clone https://github.com/jamacz/clink.git
