@@ -8,11 +8,11 @@ Clink is an esoteric functional programming language designed to be extensible, 
 - `@` - read ASCII character and push to stack
 - `#` - pop and print ASCII character from top of stack
 
-This is an interpreter for Clink. It's not the best implementation - I could create a compiler or some fancy JIT compilation - but this is more intended to be a proof of concept.
+This project consists of both a compiler and interpreter for Clink. It's not the best implementation - I could optimise the compiler/interpreter more - but this is more intended to be a proof of concept.
 
 ## Installation
 
-Installation is easy. Make sure you have `cargo` installed and run:
+Installation is easy. Make sure you have `cargo` and `clang` installed and run:
 
 ```bash
 git clone https://github.com/jamacz/clink.git
@@ -24,13 +24,19 @@ You will find a binary in `./target/release`. Extract to wherever you want.
 
 ## Usage
 
-To run the clink interpreter, navigate to your project folder and run:
+To build a clink project, navigate to your project folder and run:
+
+``` bash
+clink build <file>
+```
+
+where `<file>` is a `.clink` file. The binary will be saved in the project folder.
+
+Alternatively, to run the clink interpreter, run:
 
 ``` bash
 clink run <file>
 ```
-
-where `<file>` is a `.clink` file.
 
 ## Tutorial
 
@@ -215,3 +221,7 @@ It's a fun experiment to see how much you can add to the language. I'm currently
 ### What were your inspirations?
 
 The inner workings of my mind.
+
+### Help! Character input is really weird!
+
+I know... I'm trying to work around that issue - it's a cross platform nightmare to read a single character without a buffer :(
